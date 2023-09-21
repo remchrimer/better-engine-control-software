@@ -53,7 +53,7 @@ jobs:
           name: windows-artifacts
           path: build-sim/Debug/ecs_sim.exe
 
-  sim-linux:
+  sim-linux-clang:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -67,10 +67,48 @@ jobs:
           sudo apt-get install -y cmake
         working-directory: ${{ github.workspace }}
 
-      - name: Build for Linux
+      - name: Install Clang on Linux
         run: |
-          cmake -B build-sim
-          cmake --build build-sim --target ecs_sim
+          sudo apt-get update -y
+          sudo apt-get install -y clang
+        working-directory: ${{ github.workspace }}
+
+      - name: Linux Build with Clang
+        run: |
+          cmake -B build-sim-clang
+          cmake --build build-sim-clang --target ecs_sim
+        working-directory: ${{ github.workspace }}
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: linux-artifacts
+          path: build-sim/ecs_sim
+          
+  sim-linux-gcc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with: 
+          submodules: recursive
+
+      - name: Install dependencies on Linux
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake
+        working-directory: ${{ github.workspace }}
+        
+      - name: Install GCC on Linux
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y gcc
+        working-directory: ${{ github.workspace }}
+
+      - name: Linux Build with GCC
+        run: |
+          cmake -B build-sim-gcc
+          cmake --build build-sim-gcc --target ecs_sim
         working-directory: ${{ github.workspace }}
 
       - name: Upload Linux artifacts
