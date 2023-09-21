@@ -15,3 +15,30 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v2
+        
+      - name: Set up QEMU (if necessary)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static
+
+      - name: Install required packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y file
+
+      - name: Cross-compile for Raspberry Pi
+        run: |
+          cmake -B build-pi -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=CMake/arm-pi-gnueabihf.toolchain.cmake
+          cmake --build build-pi --target ecs_pi -- -j 8
+
+      - name: Check if executable is ARM
+        run: |
+          file build-pi/ecs_pi | tee log.txt
+          grep "ARM" log.txt
+
+      - name: Upload artifact
+        if: success()
+        uses: actions/upload-artifact@v2
+        with:
+          name: pi-executable
+          path: build-pi/ecs_pi
