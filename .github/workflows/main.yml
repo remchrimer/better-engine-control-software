@@ -1,0 +1,103 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main  # Change this to the branch you want to trigger the workflow on
+
+jobs:
+  pi-cross-compile:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      
+      - name: Set up cross-compiler
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake
+          cmake -B build-pi -DIS_CROSS=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=CMake/arm-pi-gnueabihf.toolchain.cmake
+        working-directory: ${{ github.workspace }}
+      
+      - name: Build for Raspberry Pi
+        run: |
+          cmake --build build-pi --target ecs_pi -- -j 8
+        working-directory: ${{ github.workspace }}
+      
+      - name: Upload Pi artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: pi-artifacts
+          path: build-pi/ecs_pi
+
+  sim-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install CMake on Windows
+        run: |
+          choco install -y cmake
+          $env:Path += ';C:\Program Files\CMake\bin'
+      
+      - name: Build for Windows
+        run: |
+          cmake -B build-sim
+          cmake --build build-sim --target ecs_sim
+        working-directory: ${{ github.workspace }}
+      
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: windows-artifacts
+          path: build-sim/Debug/ecs_sim.exe
+
+  sim-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install dependencies on Linux
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake
+        working-directory: ${{ github.workspace }}
+
+      - name: Build for Linux
+        run: |
+          cmake -B build-sim
+          cmake --build build-sim --target ecs_sim
+        working-directory: ${{ github.workspace }}
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: linux-artifacts
+          path: build-sim/ecs_sim
+
+  unit_test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install dependencies for unit tests
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake
+        working-directory: ${{ github.workspace }}
+
+      - name: Build and run unit tests
+        run: |
+          mkdir build
+          cd build
+          cmake ..
+          cmake --build . --target all_tests
+          cd catch_tests
+          ./all_tests
+        working-directory: ${{ github.workspace }}
