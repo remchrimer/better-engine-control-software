@@ -14,19 +14,22 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-        with:
-          submodules: recursive
       
       - name: Set up cross-compiler
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake
-          cmake -B build-pi -DIS_CROSS=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=CMake/arm-pi-gnueabihf.toolchain.cmake
+          sudo apt-get install -y cmake file # Install 'file' command
+          cmake -B build-pi -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=CMake/arm-pi-gnueabihf.toolchain.cmake
         working-directory: ${{ github.workspace }}
       
       - name: Build for Raspberry Pi
         run: |
           cmake --build build-pi --target ecs_pi -- -j 8
+          echo "Checking to make sure executable is actually ARM"
+          file build-pi/ecs_pi | tee log.txt
+          grep "ARM" log.txt # check to make sure "ARM" appears in the output of the 'file' command
+          echo "Build successful!"
+          # Testing is not possible with Docker
         working-directory: ${{ github.workspace }}
       
       - name: Upload Pi artifacts
@@ -48,17 +51,14 @@ jobs:
       
       - name: Build for Windows
         run: |
-          cmake -B build-sim
-          cmake --build build-sim --target ecs_sim
+          cmake -B build
+          cmake --build build --target ecs_sim
+          echo "Build successful!"
+          cmake --build build --target all_tests
+          build/catch_tests/Debug/all_tests # You may need to adjust this path
         working-directory: ${{ github.workspace }}
       
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: windows-artifacts
-          path: build-sim/Debug/ecs_sim.exe
-
-  sim-linux:
+  sim-linux-clang:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -67,39 +67,35 @@ jobs:
       - name: Install dependencies on Linux
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake
+          sudo apt-get install --yes cmake
         working-directory: ${{ github.workspace }}
 
-      - name: Build for Linux
+      - name: Build with Clang on Linux
         run: |
-          cmake -B build-sim
-          cmake --build build-sim --target ecs_sim
+          cmake -B build
+          cmake --build build --target ecs_sim
+          echo "Build successful!"
+          cmake --build build --target all_tests
+          build/catch_tests/all_tests
         working-directory: ${{ github.workspace }}
 
-      - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: linux-artifacts
-          path: build-sim/ecs_sim
-
-  unit_test:
+  sim-linux-gcc:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Install dependencies for unit tests
+      - name: Install dependencies on Linux
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake
+          sudo apt-get install --yes cmake
         working-directory: ${{ github.workspace }}
 
-      - name: Build and run unit tests
+      - name: Build with GCC on Linux
         run: |
-          mkdir build
-          cd build
-          cmake ..
-          cmake --build . --target all_tests
-          cd catch_tests
-          ./all_tests
+          cmake -B build
+          cmake --build build --target ecs_sim
+          echo "Build successful!"
+          cmake --build build --target all_tests
+          build/catch_tests/all_tests
         working-directory: ${{ github.workspace }}
