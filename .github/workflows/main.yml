@@ -5,6 +5,11 @@ on:
     branches:
       - main  # Change this to the branch you want to trigger the workflow on
 
+      - name: checkout all the submodules
+  uses: actions/checkout@v2
+  with:
+    submodules: recursive
+
 jobs:
   pi-cross-compile:
     runs-on: ubuntu-latest
