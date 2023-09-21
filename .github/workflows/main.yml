@@ -6,49 +6,11 @@ on:
       - main  # Adjust the branch name as needed
 
 jobs:
-  pi-cross-compile:
-    runs-on: ubuntu-latest  # You can adjust the runner as needed
-
-    env:
-      GIT_SUBMODULE_STRATEGY: recursive  # Set the environment variable
-
+  build:
+    runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v2
-        
-      - name: Set up QEMU (if necessary)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y qemu-user-static
-
-      - name: Install required packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y file
-
-      - name: Install Build Essentials
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
-
-      - name: Set Environment Variables
-        run: |
-          export CC=/home/runner/work/better-engine-control-software/better-engine-control-software/build-pi/CMakeFiles/CMakeScratch/TryCompile-3PMu5X  # Set the path to your cross-compiler
-          export CXX=/home/runner/work/better-engine-control-software/better-engine-control-software/build-pi/CMakeFiles/CMakeScratch/TryCompile-3PMu5X  # Set the path to your cross-compiler
-
-      - name: Cross-compile for Raspberry Pi
-        run: |
-          cmake -B build-pi -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=CMake/arm-pi-gnueabihf.toolchain.cmake
-          cmake --build build-pi --target ecs_pi -- -j 8
-
-      - name: Check if executable is ARM
-        run: |
-          file build-pi/ecs_pi | tee log.txt
-          grep "ARM" log.txt
-
-      - name: Upload artifact
-        if: success()
-        uses: actions/upload-artifact@v2
-        with:
-          name: pi-executable
-          path: build-pi/ecs_pi
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
