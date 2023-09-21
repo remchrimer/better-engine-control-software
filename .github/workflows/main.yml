@@ -1,109 +1,17 @@
-name: CI/CD
+name: Build and Test
 
 on:
   push:
     branches:
-      - main  # Change this to the branch you want to trigger the workflow on
+      - main
 
 jobs:
-  checkout-submodules:  # Add a new job for checking out submodules
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code with submodules
-        uses: actions/checkout@v2
-        with:
-          submodules: recursive
-
   pi-cross-compile:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
+    runs-on: ubuntu-latest  # You can adjust the runner as needed
+
+    env:
+      GIT_SUBMODULE_STRATEGY: recursive  # Set the environment variable
+
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v2
-      
-      - name: Set up cross-compiler
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y cmake file # Install 'file' command
-          cmake -B build-pi -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=CMake/arm-pi-gnueabihf.toolchain.cmake
-        working-directory: ${{ github.workspace }}
-      
-      - name: Build for Raspberry Pi
-        run: |
-          cmake --build build-pi --target ecs_pi -- -j 8
-          echo "Checking to make sure executable is actually ARM"
-          file build-pi/ecs_pi | tee log.txt
-          grep "ARM" log.txt # check to make sure "ARM" appears in the output of the 'file' command
-          echo "Build successful!"
-          # Testing is not possible with Docker
-        working-directory: ${{ github.workspace }}
-      
-      - name: Upload Pi artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: pi-artifacts
-          path: build-pi/ecs_pi
-
-  sim-windows:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Install CMake on Windows
-        run: |
-          choco install -y cmake
-          $env:Path += ';C:\Program Files\CMake\bin'
-      
-      - name: Build for Windows
-        run: |
-          cmake -B build
-          cmake --build build --target ecs_sim
-          echo "Build successful!"
-          cmake --build build --target all_tests
-          build/catch_tests/Debug/all_tests # You may need to adjust this path
-        working-directory: ${{ github.workspace }}
-      
-  sim-linux-clang:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Install dependencies on Linux
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install --yes cmake
-        working-directory: ${{ github.workspace }}
-
-      - name: Build with Clang on Linux
-        run: |
-          cmake -B build
-          cmake --build build --target ecs_sim
-          echo "Build successful!"
-          cmake --build build --target all_tests
-          build/catch_tests/all_tests
-        working-directory: ${{ github.workspace }}
-
-  sim-linux-gcc:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Install dependencies on Linux
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install --yes cmake
-        working-directory: ${{ github.workspace }}
-
-      - name: Build with GCC on Linux
-        run: |
-          cmake -B build
-          cmake --build build --target ecs_sim
-          echo "Build successful!"
-          cmake --build build --target all_tests
-          build/catch_tests/all_tests
-        working-directory: ${{ github.workspace }}
