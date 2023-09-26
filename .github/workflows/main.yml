@@ -1,118 +1,94 @@
-name: CI/CD
+stages:
+  - build-and-test
 
-on:
-  push:
-    branches:
-      - main  # Change this to the branch you want to trigger the workflow on
+# doesn't clone submodules otherwise
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
 
-jobs:    
-  pi-cross-compile:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-        with: 
-          submodules: recursive
-      
-      - name: Build for Raspberry Pi
-        run: |
-          ./build_docker.sh
-        working-directory: ${{ github.workspace }}
+pi-cross-compile:
+  stage: build-and-test
+  dependencies: []
+  image: wpilib/raspbian-cross-ubuntu:bullseye-22.04
+  before_script:
+    - apt-get update
+    - apt install --yes file # for some mfing reason this ubuntu container doesn't have file command, install it
+  script:
+    - cmake -B build-pi -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=CMake/arm-pi-gnueabihf.toolchain.cmake
+    - cmake --build build-pi --target ecs_pi -- -j 8
 
-      - name: Upload Pi artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: pi-artifacts
-          path: build-pi/ecs_pi
+    - echo "Checking to make sure executable is actually ARM"
+    - file build-pi/ecs_pi | tee log.txt
+    - grep "ARM" log.txt # check to make sure "ARM" appears in output of file command
 
-  sim-windows:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-        with: 
-          submodules: recursive
+    - echo "Build successful!"
+    - echo "Not testing, not possible with Docker"
+  artifacts:
+    paths:
+      - build-pi/ecs_pi
 
-      - name: Install CMake on Windows
-        run: |
-          choco install -y cmake
-          $env:Path += ';C:\Program Files\CMake\bin'
-      
-      - name: Build for Windows
-        run: |
-          cmake -B build-sim
-          cmake --build build-sim --target ecs_sim
-        working-directory: ${{ github.workspace }}
-      
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: windows-artifacts
-          path: build-sim/Debug/ecs_sim.exe
+sim-windows:
+  stage: build-and-test
+  dependencies: []
+  tags:
+    - windows
+  before_script:
+    - choco install -y cmake
+    - $env:Path += ';C:\Program Files\CMake\bin'
+  script:
+    - cmake -B build
+    - cmake --build build --target ecs_sim
+    - echo "Build successful!"
 
-  sim-linux-clang:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-        with: 
-          submodules: recursive
+    - cmake --build build --target all_tests
+    - build/catch_tests/Debug/all_tests # yeah fucking cringe, the random ass Debug folder
+  rules: # Currently only running windows builds on MRs to reduce build time
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
 
-      - name: Install dependencies on Linux
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y cmake
-        working-directory: ${{ github.workspace }}
+sim-mac:
+  stage: build-and-test
+  dependencies: []
+  runs-on: macos-latest
+  before_script:
+    - brew install cmake
+  script:
+    - cmake -B build
+    - cmake --build build --target ecs_sim
+    - echo "Build successful!"
 
-      - name: Install Clang on Linux
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y clang
-        working-directory: ${{ github.workspace }}
+    - cmake --build build --target all_tests
+    - build/catch_tests/Debug/all_tests # yeah fucking cringe, the random ass Debug folder
+  rules: # Currently only running windows builds on MRs to reduce build time
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
 
-      - name: Linux Build with Clang
-        run: |
-          cmake -B build-sim-clang
-          cmake --build build-sim-clang --target ecs_sim
-        working-directory: ${{ github.workspace }}
 
-      - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: linux-artifacts
-          path: build-sim/ecs_sim
-          
-  sim-linux-gcc:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-        with: 
-          submodules: recursive
+sim-linux-clang:
+  stage: build-and-test
+  dependencies: []
+  image: silkeh/clang
+  before_script:
+    - apt-get update --yes
+    - apt-get install --yes cmake
+  script:
+    - cmake -B build
+    - cmake --build build --target ecs_sim
+    - echo "Build successful!"
 
-      - name: Install dependencies on Linux
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y cmake
-        working-directory: ${{ github.workspace }}
-        
-      - name: Install GCC on Linux
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y gcc
-        working-directory: ${{ github.workspace }}
+    - cmake --build build --target all_tests
+    - build/catch_tests/all_tests
 
-      - name: Linux Build with GCC
-        run: |
-          cmake -B build-sim-gcc
-          cmake --build build-sim-gcc --target ecs_sim
-        working-directory: ${{ github.workspace }}
+sim-linux-gcc:
+  stage: build-and-test
+  dependencies: []
+  image: gcc
+  before_script:
+    - apt-get update --yes
+    - apt-get install --yes cmake
+  script:
+    - cmake -B build
+    - cmake --build build --target ecs_sim
+    - echo "Build successful!"
 
-      - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: linux-artifacts
-          path: build-sim/ecs_sim
+    - cmake --build build --target all_tests
+    - build/catch_tests/all_tests
+
+
