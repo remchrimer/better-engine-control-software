@@ -79,7 +79,7 @@ jobs:
       - name: Build and run unit tests
         run: |
           cmake --build build --target all_tests
-          build/catch_tests/Debug/all_tests
+          build/catch_tests/all_tests
         working-directory: ${{ github.workspace }}
   
 
