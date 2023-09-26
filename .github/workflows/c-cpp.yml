@@ -1,94 +1,139 @@
-stages:
-  - build-and-test
+name: CI/CD
 
-# doesn't clone submodules otherwise
-variables:
-  GIT_SUBMODULE_STRATEGY: recursive
+on:
+  pull_request:
+  push:
+    branches:
+      - main  # Change this to the branch you want to trigger the workflow on
 
-pi-cross-compile:
-  stage: build-and-test
-  dependencies: []
-  image: wpilib/raspbian-cross-ubuntu:bullseye-22.04
-  before_script:
-    - apt-get update
-    - apt install --yes file # for some mfing reason this ubuntu container doesn't have file command, install it
-  script:
-    - cmake -B build-pi -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=CMake/arm-pi-gnueabihf.toolchain.cmake
-    - cmake --build build-pi --target ecs_pi -- -j 8
+jobs:    
+  pi-cross-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with: 
+          submodules: recursive
+      
+      - name: Build for Raspberry Pi
+        run: |
+          ./build_docker.sh
+          echo "Checking to make sure executable is actually ARM"
+          file build-pi/ecs_pi | tee log.txt
+          grep "ARM" log.txt  # check to make sure "ARM" appears in output of file command
 
-    - echo "Checking to make sure executable is actually ARM"
-    - file build-pi/ecs_pi | tee log.txt
-    - grep "ARM" log.txt # check to make sure "ARM" appears in output of file command
+          echo "Build successful!"
+          echo "Not testing, not possible with Docker"
+        working-directory: ${{ github.workspace }}
 
-    - echo "Build successful!"
-    - echo "Not testing, not possible with Docker"
-  artifacts:
-    paths:
-      - build-pi/ecs_pi
+      - name: Upload Pi artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: pi-artifacts
+          path: build-pi/ecs_pi
 
-sim-windows:
-  stage: build-and-test
-  dependencies: []
-  tags:
-    - windows
-  before_script:
-    - choco install -y cmake
-    - $env:Path += ';C:\Program Files\CMake\bin'
-  script:
-    - cmake -B build
-    - cmake --build build --target ecs_sim
-    - echo "Build successful!"
+  sim-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with: 
+          submodules: recursive
 
-    - cmake --build build --target all_tests
-    - build/catch_tests/Debug/all_tests # yeah fucking cringe, the random ass Debug folder
-  rules: # Currently only running windows builds on MRs to reduce build time
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+      - name: Install CMake on Windows
+        run: |
+          choco install -y cmake
+          $env:Path += ';C:\Program Files\CMake\bin'
+      
+      - name: Build build-sim for Windows
+        run: |
+          cmake -S . -B build
+          cmake --build build --target ecs_sim
+        working-directory: ${{ github.workspace }}
 
-sim-mac:
-  stage: build-and-test
-  dependencies: []
-  runs-on: macos-latest
-  before_script:
-    - brew install cmake
-  script:
-    - cmake -B build
-    - cmake --build build --target ecs_sim
-    - echo "Build successful!"
+      - name: Build and run unit tests
+        run: |
+          cmake --build build --target all_tests
+          build/catch_tests/Debug/all_tests # yeah fucking cringe, the random ass Debug folder
+        working-directory: ${{ github.workspace }}
 
-    - cmake --build build --target all_tests
-    - build/catch_tests/Debug/all_tests # yeah fucking cringe, the random ass Debug folder
-  rules: # Currently only running windows builds on MRs to reduce build time
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  sim-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
 
+      - name: Install CMake on Mac
+        run: |
+          brew install cmake
+          shell: bash
 
-sim-linux-clang:
-  stage: build-and-test
-  dependencies: []
-  image: silkeh/clang
-  before_script:
-    - apt-get update --yes
-    - apt-get install --yes cmake
-  script:
-    - cmake -B build
-    - cmake --build build --target ecs_sim
-    - echo "Build successful!"
+      - name: Build build-sim for Mac
+        run: |
+          cmake -S . -B build
+          cmake --build build --target ecs_sim
+        working-directory: ${{ github.workspace }}
 
-    - cmake --build build --target all_tests
-    - build/catch_tests/all_tests
+      - name: Build and run unit tests
+        run: |
+          cmake --build build --target all_tests
+          build/catch_tests/Debug/all_tests
+        working-directory: ${{ github.workspace }}
+  
 
-sim-linux-gcc:
-  stage: build-and-test
-  dependencies: []
-  image: gcc
-  before_script:
-    - apt-get update --yes
-    - apt-get install --yes cmake
-  script:
-    - cmake -B build
-    - cmake --build build --target ecs_sim
-    - echo "Build successful!"
+  sim-linux-clang:
+    runs-on: ubuntu-latest
+    container: silkeh/clang
+    steps:
+      - name: Install dependencies and CMake on Linux
+        run: |
+          apt-get update -y
+          apt-get install -y cmake
+          apt-get install -y git # this moronic container doesnt have git with submodules
+        working-directory: ${{ github.workspace }}
 
-    - cmake --build build --target all_tests
-    - build/catch_tests/all_tests
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with: 
+          submodules: recursive
 
+      - name: Build ecs_sim with Clang on Linux
+        run: |
+          cmake -S . -B build
+          cmake --build build --target ecs_sim
+        working-directory: ${{ github.workspace }}
+      
+      - name: Build and run unit tests
+        run: |
+          cmake --build build --target all_tests
+          build/catch_tests/all_tests
+        working-directory: ${{ github.workspace }}
+          
+  sim-linux-gcc:
+    runs-on: ubuntu-latest
+    container: gcc
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with: 
+          submodules: recursive
 
+      - name: Install dependencies and CMake on Linux
+        run: |
+          apt-get update -y
+          apt-get install -y cmake
+        working-directory: ${{ github.workspace }}
+
+      - name: Build ecs_sim with GCC on Linux
+        run: |
+          cmake -S . -B build
+          cmake --build build --target ecs_sim
+        working-directory: ${{ github.workspace }}
+
+      - name: Build and run unit tests
+        run: |
+          cmake --build build --target all_tests
+          build/catch_tests/all_tests
+        working-directory: ${{ github.workspace }}
