@@ -68,7 +68,7 @@ jobs:
       - name: Install CMake on Mac
         run: |
           brew install cmake
-          $env:Path += "/usr/local/bin:$PATH"
+          export PATH="/usr/local/bin:$PATH"
 
       - name: Build build-sim for Mac
         run: |
